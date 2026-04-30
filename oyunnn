@@ -1,117 +1,171 @@
-<!DOCTYPE html>
-<html lang="tr">
-<head>
-<meta charset="UTF-8">
-<title>Flappy At 🐎</title>
-<style>
-  body { margin: 0; overflow: hidden; background: skyblue; }
-  canvas { display: block; margin: auto; background: lightgreen; }
-</style>
-</head>
-<body>
-<canvas id="gameCanvas" width="400" height="600"></canvas>
+import React, { useEffect, useRef, useState } from "react";
 
-<script>
-const canvas = document.getElementById("gameCanvas");
-const ctx = canvas.getContext("2d");
+// Basit Flappy Bird tarzı oyun (at karakterli)
+export default function FlappyHorseGame() {
+  const canvasRef = useRef(null);
+  const [started, setStarted] = useState(false);
+  const [gameOver, setGameOver] = useState(false);
 
-let horse = {
-  x: 80,
-  y: 200,
-  width: 40,
-  height: 40,
-  velocity: 0,
-  gravity: 0.5,
-  lift: -8
-};
-
-let pipes = [];
-let frame = 0;
-let score = 0;
-
-function drawHorse() {
-  ctx.fillStyle = "brown";
-  ctx.fillRect(horse.x, horse.y, horse.width, horse.height);
-}
-
-function drawPipes() {
-  ctx.fillStyle = "green";
-  pipes.forEach(pipe => {
-    ctx.fillRect(pipe.x, 0, pipe.width, pipe.top);
-    ctx.fillRect(pipe.x, pipe.bottom, pipe.width, canvas.height);
+  const game = useRef({
+    y: 200,
+    velocity: 0,
+    gravity: 0.6,
+    jump: -10,
+    pipes: [],
+    score: 0,
+    frame: 0,
   });
+
+  // Arka plan parallax
+  const bgOffset = useRef(0);
+
+  const resetGame = () => {
+    game.current = {
+      y: 200,
+      velocity: 0,
+      gravity: 0.6,
+      jump: -10,
+      pipes: [],
+      score: 0,
+      frame: 0,
+    };
+    bgOffset.current = 0;
+    setGameOver(false);
+    setStarted(true);
+  };
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+
+    const horseImg = new Image();
+    // Basit placeholder at görseli (istersen değiştir)
+    horseImg.src =
+      "https://upload.wikimedia.org/wikipedia/commons/7/7e/Horse_icon.png";
+
+    const handleKey = (e) => {
+      if (e.code === "Space") {
+        if (!started) {
+          resetGame();
+        }
+
+        if (gameOver) {
+          resetGame();
+          return;
+        }
+
+        game.current.velocity = game.current.jump;
+      }
+    };
+
+    window.addEventListener("keydown", handleKey);
+
+    const drawBackground = () => {
+      // 3D hissi veren parallax katmanlar
+      bgOffset.current += 1;
+
+      ctx.fillStyle = "#70c5ce";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Dağlar
+      ctx.fillStyle = "#4a8";
+      for (let i = 0; i < 5; i++) {
+        ctx.beginPath();
+        ctx.moveTo((i * 200 - bgOffset.current * 0.3) % 1000, 300);
+        ctx.lineTo(100 + i * 200, 150);
+        ctx.lineTo(200 + i * 200, 300);
+        ctx.fill();
+      }
+
+      // Zemin
+      ctx.fillStyle = "#2d8f2d";
+      ctx.fillRect(0, 350, canvas.width, 150);
+    };
+
+    const drawHorse = () => {
+      ctx.drawImage(horseImg, 80, game.current.y, 40, 40);
+    };
+
+    const drawPipes = () => {
+      ctx.fillStyle = "green";
+      game.current.pipes.forEach((pipe) => {
+        ctx.fillRect(pipe.x, 0, 50, pipe.top);
+        ctx.fillRect(pipe.x, pipe.bottom, 50, 400);
+      });
+    };
+
+    const update = () => {
+      if (!started || gameOver) return;
+
+      const g = game.current;
+      g.frame++;
+
+      g.velocity += g.gravity;
+      g.y += g.velocity;
+
+      // Pipe oluştur
+      if (g.frame % 90 === 0) {
+        const top = Math.random() * 200 + 50;
+        g.pipes.push({ x: 400, top, bottom: top + 120 });
+      }
+
+      // Pipe hareket
+      g.pipes.forEach((p) => (p.x -= 3));
+      g.pipes = g.pipes.filter((p) => p.x > -50);
+
+      // Çarpışma
+      g.pipes.forEach((p) => {
+        if (
+          80 < p.x + 50 &&
+          120 > p.x &&
+          (g.y < p.top || g.y > p.bottom)
+        ) {
+          setGameOver(true);
+        }
+      });
+
+      if (g.y > 350 || g.y < 0) {
+        setGameOver(true);
+      }
+
+      g.score++;
+    };
+
+    const drawUI = () => {
+      ctx.fillStyle = "#000";
+      ctx.font = "20px Arial";
+      ctx.fillText("Skor: " + game.current.score, 10, 30);
+
+      if (!started) {
+        ctx.fillText("Başlamak için SPACE", 120, 200);
+      }
+
+      if (gameOver) {
+        ctx.fillText("Oyun Bitti - SPACE ile yeniden", 80, 200);
+      }
+    };
+
+    const loop = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      drawBackground();
+      update();
+      drawPipes();
+      drawHorse();
+      drawUI();
+
+      requestAnimationFrame(loop);
+    };
+
+    loop();
+
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [started, gameOver]);
+
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <canvas ref={canvasRef} width={400} height={400} className="border" />
+      <p>Boşluk: zıpla | Ölünce boşluk: yeniden başlat</p>
+    </div>
+  );
 }
-
-function updatePipes() {
-  if (frame % 90 === 0) {
-    let top = Math.random() * 250 + 50;
-    let gap = 150;
-    pipes.push({
-      x: canvas.width,
-      width: 50,
-      top: top,
-      bottom: top + gap
-    });
-  }
-
-  pipes.forEach(pipe => {
-    pipe.x -= 2;
-
-    // collision
-    if (
-      horse.x < pipe.x + pipe.width &&
-      horse.x + horse.width > pipe.x &&
-      (horse.y < pipe.top || horse.y + horse.height > pipe.bottom)
-    ) {
-      alert("Oyun bitti! Skor: " + score);
-      document.location.reload();
-    }
-
-    // score
-    if (pipe.x + pipe.width === horse.x) {
-      score++;
-    }
-  });
-}
-
-function updateHorse() {
-  horse.velocity += horse.gravity;
-  horse.y += horse.velocity;
-
-  if (horse.y + horse.height >= canvas.height || horse.y <= 0) {
-    alert("Oyun bitti! Skor: " + score);
-    document.location.reload();
-  }
-}
-
-function drawScore() {
-  ctx.fillStyle = "black";
-  ctx.font = "20px Arial";
-  ctx.fillText("Skor: " + score, 10, 25);
-}
-
-function gameLoop() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  drawHorse();
-  drawPipes();
-  updateHorse();
-  updatePipes();
-  drawScore();
-
-  frame++;
-  requestAnimationFrame(gameLoop);
-}
-
-document.addEventListener("keydown", () => {
-  horse.velocity = horse.lift;
-});
-
-canvas.addEventListener("click", () => {
-  horse.velocity = horse.lift;
-});
-
-gameLoop();
-</script>
-</body>
-</html>
